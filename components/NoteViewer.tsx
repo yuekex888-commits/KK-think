@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { BookOpen, FileText, X } from 'lucide-react';
 
@@ -24,7 +25,7 @@ export const NoteViewer: React.FC<Props> = ({ noteA, noteB, isOpen, onClose }) =
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'B' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'}`}
           >
             <FileText size={16}/>
-            Note B (详细规格书 - 智能体D)
+            Note B (详细规格书 - 总结师)
           </button>
           <button 
             onClick={() => setActiveTab('A')}

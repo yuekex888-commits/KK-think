@@ -243,7 +243,7 @@ export default function App() {
              </div>
              <div className="text-center space-y-2">
                <h3 className="text-lg font-bold text-gray-800">
-                  {generatedPrompt ? '智能体 E 正在生成提示词...' : '智能体团队正在协作...'}
+                  {generatedPrompt ? '提示词工程师正在生成提示词...' : '专家团队正在协作...'}
                </h3>
                <p className="text-sm text-gray-500">
                  {generatedPrompt ? '正在整理 Note B 规格说明书' : '分析指令 · 更新思维导图 · 生成建议 · 毒舌挑刺'}
@@ -340,7 +340,7 @@ export default function App() {
              }} 
            />
            <div className="absolute top-4 left-4 bg-white/80 backdrop-blur p-3 rounded-lg shadow-sm text-xs text-gray-500 max-w-xs pointer-events-none select-none">
-             <h4 className="font-bold text-gray-700 mb-1">智能体 C (绘图师)</h4>
+             <h4 className="font-bold text-gray-700 mb-1">绘图师</h4>
              <p>思维导图由 AI 自动生成。点击节点 +/- 可展开查看。</p>
            </div>
 
@@ -378,7 +378,7 @@ export default function App() {
                <div className="p-5 border-b flex justify-between items-center bg-gray-50">
                  <div className="flex items-center gap-3">
                    <div className="bg-green-100 p-2 rounded-lg"><Code className="text-green-600"/></div>
-                   <h2 className="text-xl font-bold text-gray-800">智能体 E 生成的构建提示词</h2>
+                   <h2 className="text-xl font-bold text-gray-800">提示词工程师生成的构建提示词</h2>
                  </div>
                  <button onClick={() => setGeneratedPrompt(null)} className="text-gray-500 hover:text-red-500 font-bold px-4 py-2 hover:bg-red-50 rounded-lg">关闭</button>
                </div>

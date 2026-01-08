@@ -16,7 +16,7 @@ export const CriticismBubbles: React.FC<Props> = ({ criticisms, onClose }) => {
       {/* Header Badge */}
       <div className="bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 mb-1">
         <MessageSquareWarning size={12} />
-        智能体 F (挑刺师) 的吐槽
+        挑刺师的吐槽
       </div>
       
       {/* Bubbles Container - Horizontal */}

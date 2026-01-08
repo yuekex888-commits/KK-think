@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Suggestion } from '../types';
 import { MessageSquare, Send, CheckCircle, User, Code } from 'lucide-react';
@@ -119,7 +120,7 @@ export const InteractionPanel: React.FC<Props> = ({
           {isLoading ? (
             <>
               <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"/>
-              智能体团队工作中...
+              专家团队工作中...
             </>
           ) : (
             <>

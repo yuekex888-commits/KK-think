@@ -30,7 +30,7 @@ export const INITIAL_PROJECT: Project = {
   name: '未命名项目',
   mindMap: INITIAL_MIND_MAP,
   noteA: '*** Note A: 用户交互历史记录 (线性记录) ***\n[系统初始化] 项目创建。\n',
-  noteB: '# 软件详细规格说明书 (Note B)\n\n> 由智能体 D (总结师) 维护，包含所有功能细节、UI设计及交互逻辑。\n\n## 1. 项目概况\n待定义...\n',
+  noteB: '# 软件详细规格说明书 (Note B)\n\n> 由总结师维护，包含所有功能细节、UI设计及交互逻辑。\n\n## 1. 项目概况\n待定义...\n',
   historyStack: [],
   lastModified: Date.now(),
 };

@@ -34,7 +34,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
         <div className="flex justify-between items-center p-6 border-b shrink-0">
           <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
             <Settings className="w-6 h-6 text-indigo-600" />
-            系统设置 & 智能体配置
+            系统设置 & 角色配置
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <X className="w-5 h-5 text-gray-500" />
@@ -63,7 +63,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
             }`}
           >
             <Users size={16} />
-            智能体身份配置 (6 Agents)
+            角色身份配置
           </button>
         </div>
 
@@ -109,13 +109,13 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
             <div className="space-y-6 animate-in fade-in slide-in-from-right-2">
               <p className="text-sm text-gray-500 bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2">
                 <UserCog size={16} className="text-blue-500 mt-0.5 shrink-0"/>
-                在这里自定义每个智能体的“人设”提示词。这些设定将直接影响 AI 的回复风格、关注点以及生成的文档质量。
+                在这里自定义每个角色的“人设”提示词。这些设定将直接影响 AI 的回复风格、关注点以及生成的文档质量。
               </p>
 
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-bold text-blue-700 flex items-center gap-2 mb-1">
-                    智能体 A: 程序猿 (IT 分析师)
+                    程序猿 (IT 分析师)
                   </label>
                   <textarea 
                     value={localSettings.agentPrompts.programmer}
@@ -126,7 +126,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
 
                 <div>
                   <label className="text-sm font-bold text-orange-700 flex items-center gap-2 mb-1">
-                    智能体 B: 产品师 (应用分析师)
+                    产品师 (应用分析师)
                   </label>
                   <textarea 
                     value={localSettings.agentPrompts.product}
@@ -137,7 +137,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
 
                 <div>
                   <label className="text-sm font-bold text-indigo-700 flex items-center gap-2 mb-1">
-                    智能体 C: 绘图师 (思维导图专家)
+                    绘图师 (思维导图专家)
                   </label>
                   <textarea 
                     value={localSettings.agentPrompts.mapper}
@@ -148,7 +148,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
 
                 <div>
                   <label className="text-sm font-bold text-purple-700 flex items-center gap-2 mb-1">
-                    智能体 D: 总结师 (核心归纳)
+                    总结师 (核心归纳)
                   </label>
                   <textarea 
                     value={localSettings.agentPrompts.summarizer}
@@ -159,7 +159,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
 
                 <div>
                   <label className="text-sm font-bold text-green-700 flex items-center gap-2 mb-1">
-                    智能体 E: 提示词工程师 (Prompt Engineer)
+                    提示词工程师 (Prompt Engineer)
                   </label>
                   <textarea 
                     value={localSettings.agentPrompts.promptEngineer}
@@ -171,7 +171,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
                 <div>
                   <label className="text-sm font-bold text-red-700 flex items-center gap-2 mb-1">
                     <MessageSquareWarning size={14}/>
-                    智能体 F: 挑刺师 (毒舌评论家)
+                    挑刺师 (毒舌评论家)
                   </label>
                   <textarea 
                     value={localSettings.agentPrompts.critic}

@@ -86,7 +86,7 @@ export const DeepQueryPanel: React.FC<Props> = ({ queries, onQueryChange, isLoad
       <div className="flex-1 overflow-y-auto p-4 border-b border-gray-200 bg-orange-50/30 relative scroll-smooth">
         <h3 className="text-sm font-bold text-orange-700 mb-3 flex items-center gap-2 sticky top-[-1px] bg-orange-50/95 backdrop-blur-sm py-2 z-10 w-full shadow-sm rounded-b-lg">
           <User size={16}/>
-          产品师 (智能体 B)
+          产品师
           <span className="text-xs font-normal text-gray-500 ml-auto">{productQueries.length} 个问题</span>
         </h3>
         <div className="pb-2">
@@ -102,7 +102,7 @@ export const DeepQueryPanel: React.FC<Props> = ({ queries, onQueryChange, isLoad
       <div className="flex-1 overflow-y-auto p-4 bg-blue-50/30 relative scroll-smooth">
         <h3 className="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2 sticky top-[-1px] bg-blue-50/95 backdrop-blur-sm py-2 z-10 w-full shadow-sm rounded-b-lg">
           <Code size={16}/>
-          程序猿 (智能体 A)
+          程序猿
           <span className="text-xs font-normal text-gray-500 ml-auto">{programmerQueries.length} 个问题</span>
         </h3>
         <div className="pb-2">
