@@ -1,46 +1,844 @@
+
 <!DOCTYPE html>
-<html lang="en">
-  <head>
+<html lang="zh-CN">
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI 架构师工作室</title>
+    <title>AI 架构师工作室 (Local)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      /* Custom scrollbar for better aesthetics in panels */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8; 
-      }
-      /* Hide arrows in input[type=number] */
-      input::-webkit-outer-spin-button,
-      input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: #f1f1f1; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+      
+      /* Animation Utilities */
+      .animate-in { animation-duration: 0.3s; animation-fill-mode: both; }
+      .fade-in { animation-name: fadeIn; }
+      .slide-in-from-bottom-10 { --tw-enter-translate-y: 2.5rem; animation-name: slideIn; }
+      
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes slideIn { from { transform: translateY(var(--tw-enter-translate-y, 0)); } to { transform: none; } }
     </style>
-  <script type="importmap">
+    
+    <!-- Import Map for Modules -->
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "d3-selection": "https://esm.sh/d3-selection@^3.0.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.468.0?deps=react@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
+    <!-- Babel for in-browser compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-  <body>
+<body>
     <div id="root"></div>
-  </body>
+
+    <script type="text/babel" data-type="module" data-presets="typescript,react">
+        import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { 
+            Settings, Save, FolderOpen, Plus, Undo, Redo, FileText, Cpu, Code, 
+            Check, Copy, ZoomIn, ZoomOut, Move, Type, User, Sparkles, CheckCheck, 
+            MessageSquareWarning, X, MessageSquare, Send, CheckCircle, BookOpen,
+            UserCog, Server
+        } from 'lucide-react';
+
+        // --- TYPES ---
+        
+        interface MindMapNode {
+            id: string;
+            text: string;
+            detail?: string;
+            children: MindMapNode[];
+            isExpanded?: boolean;
+        }
+
+        interface Project {
+            id: string;
+            name: string;
+            mindMap: MindMapNode;
+            noteA: string;
+            noteB: string;
+            historyStack: string[];
+            lastModified: number;
+        }
+
+        interface AgentPrompts {
+            programmer: string;
+            product: string;
+            mapper: string;
+            summarizer: string;
+            promptEngineer: string;
+            critic: string;
+        }
+
+        interface AISettings {
+            apiKey: string;
+            baseUrl: string;
+            model: string;
+            agentPrompts: AgentPrompts;
+        }
+
+        interface DeepQuery {
+            id: string;
+            question: string;
+            agent: 'Programmer' | 'Product';
+            options: string[];
+            allowCustom: boolean;
+            selectedOption?: string;
+            customAnswer?: string;
+        }
+
+        interface Suggestion {
+            id: string;
+            text: string;
+            agent: 'Programmer' | 'Product';
+            accepted: boolean;
+        }
+
+        interface Criticism {
+            id: string;
+            text: string;
+        }
+
+        interface AIAnalysisResult {
+            mindMap: MindMapNode;
+            noteB: string;
+            deepQueries: DeepQuery[];
+            suggestions: Suggestion[];
+            criticisms: Criticism[];
+        }
+
+        // --- CONSTANTS ---
+
+        const DEFAULT_AGENT_PROMPTS: AgentPrompts = {
+            programmer: "关注技术实现、UI组件、数据结构、逻辑漏洞。确保方案在技术上可行且健壮。",
+            product: "关注用户体验 (UX)、实用性、业务流程（如：导航软件是否有起点定位）。站在小白用户但懂业务的角度思考。",
+            mapper: "负责绘制 JSON 结构的思维导图，确保节点详细且有逻辑。思维导图应清晰展示功能结构。",
+            summarizer: "**核心角色**。负责读取用户的 Note A (历史记录)，将其转化为 Note B (详细规格书)。必须毫无遗漏、成体系、极其细致地记录每一个按键、功能、逻辑。Note B 是项目的唯一真理来源。",
+            promptEngineer: "在最后阶段，根据 Note B 生成 AI Studio Build Prompt。需生成结构化、完备的提示词，包含角色设定、任务步骤和所有已知细节。",
+            critic: "你是智能体 F (挑刺师)。你的唯一作用就是为软件找茬。**禁止攻击其他智能体或团队成员**。只针对【软件产品本身】进行挑刺。重点关注：UI设计是否太土（Low）、动效是否缺失、交互是否反人类、功能逻辑是否缺失。语气要尖锐、讽刺，但必须基于事实，不要胡编乱造，要符合真实软件开发中的痛点。"
+        };
+
+        const DEFAULT_SETTINGS: AISettings = {
+            apiKey: 'sk-28c0d0093c2c4486ac3b394da91f7386',
+            baseUrl: 'https://api.grsai.com/v1/chat/completions',
+            model: 'gemini-3-pro',
+            agentPrompts: DEFAULT_AGENT_PROMPTS
+        };
+
+        const INITIAL_MIND_MAP: MindMapNode = {
+            id: 'root',
+            text: '软件项目根节点',
+            detail: '项目的核心起点',
+            isExpanded: true,
+            children: [],
+        };
+
+        const INITIAL_PROJECT: Project = {
+            id: 'default',
+            name: '未命名项目',
+            mindMap: INITIAL_MIND_MAP,
+            noteA: '*** Note A: 用户交互历史记录 (线性记录) ***\n[系统初始化] 项目创建。\n',
+            noteB: '# 软件详细规格说明书 (Note B)\n\n> 由智能体 D (总结师) 维护，包含所有功能细节、UI设计及交互逻辑。\n\n## 1. 项目概况\n待定义...\n',
+            historyStack: [],
+            lastModified: Date.now(),
+        };
+
+        // --- SERVICES ---
+
+        const extractJSON = (text: string): any => {
+            const markdownMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+            if (markdownMatch) {
+                try { return JSON.parse(markdownMatch[1]); } catch (e) { /* ignore */ }
+            }
+            const start = text.indexOf('{');
+            const end = text.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && end > start) {
+                try { return JSON.parse(text.substring(start, end + 1)); } catch (e) { /* ignore */ }
+            }
+            throw new Error(`No JSON found in response.`);
+        };
+
+        const callAI = async (settings: AISettings, systemPrompt: string, userContent: string, jsonMode: boolean = false): Promise<string> => {
+            const payload = {
+                model: settings.model,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userContent }
+                ],
+                temperature: 0.7,
+                max_tokens: 8000, 
+            };
+
+            try {
+                const response = await fetch(settings.baseUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${settings.apiKey}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                const data = await response.json();
+                const content = data.choices[0]?.message?.content;
+                if (!content) throw new Error("API returned empty content");
+                return content;
+            } catch (error) {
+                console.error("AI Request Failed", error);
+                throw error;
+            }
+        };
+
+        // Agent D: Summarizer
+        const runAgentSummarizer = async (settings: AISettings, noteA: string, currentNoteB: string): Promise<string> => {
+            const prompt = `
+                你现在是 **智能体 D (总结师)**。
+                【任务】
+                读取 [Note A (交互日志)] 和 [Note B (旧规格书)]。
+                将 Note A 中用户的新增指令、回答和采纳建议，整合进 Note B。
+                【原则】
+                1. Note B 是项目的唯一真理来源。必须包含所有细节。
+                2. 只能增加或修改细节，**绝对不要删除**旧的已确认细节，除非用户明确要求删除。
+                3. 输出必须是纯粹的 Markdown 格式文档。
+                4. **只返回 Note B 的内容**，不要包含任何前言或后语。
+            `;
+            const input = `*** [Note A (交互日志)] ***\n${noteA}\n*** [Note B (旧规格书)] ***\n${currentNoteB}`;
+            return await callAI(settings, settings.agentPrompts.summarizer + prompt, input);
+        };
+
+        // Agent C: Mapper
+        const runAgentMapper = async (settings: AISettings, noteB: string): Promise<MindMapNode> => {
+            const prompt = `
+                你现在是 **智能体 C (绘图师)**。
+                【任务】
+                根据 [Note B (规格书)]，生成完整的思维导图结构。
+                【要求】
+                1. 返回单一 JSON 对象，符合 MindMapNode 接口: { id: string, text: string, detail: string, children: [] }。
+                2. 根节点 ID 必须为 "root"。
+                3. 每个节点必须有 'detail' 字段，简要描述该功能点。
+                4. 结构要深，逻辑要严密。
+                5. **只返回 JSON**。
+            `;
+            const raw = await callAI(settings, settings.agentPrompts.mapper + prompt, `[Note B]:\n${noteB}`, true);
+            return extractJSON(raw);
+        };
+
+        // Agent A: Programmer
+        const runAgentProgrammer = async (settings: AISettings, noteB: string): Promise<{queries: DeepQuery[], suggestions: Suggestion[]}> => {
+            const prompt = `
+                你现在是 **智能体 A (程序猿)**。
+                【任务】
+                审查 [Note B (规格书)]，从技术实现、数据结构、逻辑漏洞角度进行分析。
+                【输出】
+                返回 JSON: { "queries": [ { "question": "...", "options": ["A..."], "allowCustom": true } ], "suggestions": [ { "text": "..." } ] }
+                **只返回 JSON**。
+            `;
+            const raw = await callAI(settings, settings.agentPrompts.programmer + prompt, `[Note B]:\n${noteB}`, true);
+            const json = extractJSON(raw);
+            const queries = (json.queries || []).map((q: any, i: number) => ({
+                id: `prog_q_${Date.now()}_${i}`,
+                agent: 'Programmer',
+                question: q.question,
+                options: q.options || [],
+                allowCustom: q.allowCustom ?? true,
+                selectedOption: '',
+                customAnswer: ''
+            }));
+            const suggestions = (json.suggestions || []).map((s: any, i: number) => ({
+                id: `prog_s_${Date.now()}_${i}`,
+                agent: 'Programmer',
+                text: s.text,
+                accepted: false
+            }));
+            return { queries, suggestions };
+        };
+
+        // Agent B: Product Manager
+        const runAgentProduct = async (settings: AISettings, noteB: string): Promise<{queries: DeepQuery[], suggestions: Suggestion[]}> => {
+            const prompt = `
+                你现在是 **智能体 B (产品师)**。
+                【任务】
+                审查 [Note B (规格书)]，从用户体验 (UX)、业务流程、实用性、遗漏功能角度进行分析。
+                【输出】
+                返回 JSON: { "queries": [ { "question": "...", "options": ["A..."], "allowCustom": true } ], "suggestions": [ { "text": "..." } ] }
+                **只返回 JSON**。
+            `;
+            const raw = await callAI(settings, settings.agentPrompts.product + prompt, `[Note B]:\n${noteB}`, true);
+            const json = extractJSON(raw);
+            const queries = (json.queries || []).map((q: any, i: number) => ({
+                id: `prod_q_${Date.now()}_${i}`,
+                agent: 'Product',
+                question: q.question,
+                options: q.options || [],
+                allowCustom: q.allowCustom ?? true,
+                selectedOption: '',
+                customAnswer: ''
+            }));
+            const suggestions = (json.suggestions || []).map((s: any, i: number) => ({
+                id: `prod_s_${Date.now()}_${i}`,
+                agent: 'Product',
+                text: s.text,
+                accepted: false
+            }));
+            return { queries, suggestions };
+        };
+
+        // Agent F: Critic
+        const runAgentCritic = async (settings: AISettings, noteA: string, noteB: string): Promise<Criticism[]> => {
+            const prompt = `
+                你现在是 **智能体 F (挑刺师)**。
+                【任务】
+                阅读 [Note A (交互历史)] 和 [Note B (当前规格)]。
+                针对当前的设计方案，找出 5 个具体的【UI/UX 问题】、【动效缺失】或【功能不合理】的地方。
+                【原则】
+                1. **绝对禁止攻击其他智能体**。只针对软件设计本身。
+                2. 评价必须符合真实软件开发逻辑，不要胡编乱造。
+                3. 语气尖锐、讽刺、直接、不留情面，像一个眼光极高的资深设计师用户。
+                【输出】
+                返回 JSON: { "criticisms": [ "这UI配色简直是...", "这里为什么没有过渡动效？", ... ] }
+                **只返回 JSON**。
+            `;
+            const input = `[Note A]: ${noteA}\n[Note B]: ${noteB}`;
+            try {
+                const raw = await callAI(settings, settings.agentPrompts.critic + prompt, input, true);
+                const json = extractJSON(raw);
+                return (json.criticisms || []).map((text: string, i: number) => ({
+                    id: `critic_${Date.now()}_${i}`,
+                    text
+                }));
+            } catch (e) {
+                console.error("Agent F failed", e);
+                return [{ id: 'err', text: '智能体 F 正在休息，暂时没空挑刺。' }];
+            }
+        };
+
+        const runMultiAgentWorkflow = async (settings: AISettings, currentNoteA: string, currentNoteB: string): Promise<AIAnalysisResult> => {
+            console.log("Starting Agent D (Summarizer)...");
+            let newNoteB = "";
+            try {
+                newNoteB = await runAgentSummarizer(settings, currentNoteA, currentNoteB);
+            } catch (e) {
+                console.error("Agent D Failed", e);
+                throw new Error("智能体 D (总结师) 运行失败，无法更新规格书。请重试。");
+            }
+            console.log("Starting Agents A, B, C, F (Concurrent)...");
+            const [mapResult, progResult, prodResult, criticResult] = await Promise.all([
+                runAgentMapper(settings, newNoteB),
+                runAgentProgrammer(settings, newNoteB),
+                runAgentProduct(settings, newNoteB),
+                runAgentCritic(settings, currentNoteA, newNoteB)
+            ]);
+            return {
+                mindMap: mapResult,
+                noteB: newNoteB,
+                deepQueries: [...progResult.queries, ...prodResult.queries],
+                suggestions: [...progResult.suggestions, ...prodResult.suggestions],
+                criticisms: criticResult
+            };
+        };
+
+        const generatePromptForAIStudio = async (settings: AISettings, noteB: string): Promise<string> => {
+            const prompt = `
+                你现在是 **智能体 E (提示词工程师)**。
+                【任务】
+                根据 [Note B]，编写一套完备的 Google AI Studio Build Prompt。
+                要求结构清晰，包含角色、步骤、详细需求。
+                直接输出内容。
+            `;
+            const result = await callAI(settings, settings.agentPrompts.promptEngineer + prompt, `[Note B]:\n${noteB}`);
+            return `${noteB}\n\n========================================\nAI STUDIO BUILD PROMPT\n========================================\n\n${result}`;
+        };
+
+        // --- COMPONENTS ---
+
+        // 1. CriticismBubbles
+        const CriticismBubbles = ({ criticisms, onClose }) => {
+            if (criticisms.length === 0) return null;
+            return (
+                <div className="absolute bottom-6 left-0 w-full flex flex-col items-center z-40 pointer-events-none gap-2 px-6">
+                    <div className="bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 mb-1">
+                        <MessageSquareWarning size={12} />
+                        智能体 F (挑刺师) 的吐槽
+                    </div>
+                    <div className="flex flex-row justify-center items-end gap-3 w-full overflow-x-auto pb-2 scrollbar-hide">
+                        {criticisms.map((c, idx) => (
+                            <div 
+                                key={c.id}
+                                style={{ animationDelay: `${idx * 100}ms` }}
+                                className="pointer-events-auto bg-white/90 border border-red-200 text-red-900 text-xs px-3 py-2 rounded-xl shadow-md min-w-[180px] max-w-[240px] animate-in fade-in slide-in-from-bottom-6 duration-500 hover:scale-105 hover:-translate-y-1 transition-all hover:shadow-lg hover:z-10 group shrink-0 backdrop-blur-sm"
+                            >
+                                <div className="flex justify-between items-start gap-2">
+                                    <span className="leading-snug break-words font-medium select-none">“{c.text}”</span>
+                                    <button onClick={() => onClose(c.id)} className="text-red-300 hover:text-red-600 transition-colors shrink-0">
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // 2. SettingsModal
+        const SettingsModal = ({ isOpen, onClose, settings, onSave }) => {
+            const [localSettings, setLocalSettings] = useState(settings);
+            const [activeTab, setActiveTab] = useState('general');
+            if (!isOpen) return null;
+            const handleAgentPromptChange = (key, value) => {
+                setLocalSettings(prev => ({
+                    ...prev,
+                    agentPrompts: { ...prev.agentPrompts, [key]: value }
+                }));
+            };
+            return (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center p-6 border-b shrink-0">
+                            <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
+                                <Settings className="w-6 h-6 text-indigo-600" />
+                                系统设置 & 智能体配置
+                            </h2>
+                            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-500" /></button>
+                        </div>
+                        <div className="flex border-b bg-gray-50 px-6 shrink-0">
+                            <button onClick={() => setActiveTab('general')} className={`py-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'general' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                                <Server size={16} /> 通用 / API 设置
+                            </button>
+                            <button onClick={() => setActiveTab('agents')} className={`py-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'agents' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                                <UserCog size={16} /> 智能体身份配置
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {activeTab === 'general' && (
+                                <div className="space-y-5 animate-in fade-in slide-in-from-left-2">
+                                    <div><label className="block text-sm font-bold text-gray-700 mb-2">API 端点 (Base URL)</label><input type="text" value={localSettings.baseUrl} onChange={(e) => setLocalSettings({...localSettings, baseUrl: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono" /></div>
+                                    <div><label className="block text-sm font-bold text-gray-700 mb-2">API 密钥 (Key)</label><input type="password" value={localSettings.apiKey} onChange={(e) => setLocalSettings({...localSettings, apiKey: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono" /></div>
+                                    <div><label className="block text-sm font-bold text-gray-700 mb-2">模型名称 (Model)</label><input type="text" value={localSettings.model} onChange={(e) => setLocalSettings({...localSettings, model: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono" /></div>
+                                </div>
+                            )}
+                            {activeTab === 'agents' && (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-2">
+                                    <div className="space-y-4">
+                                        {[
+                                            {k: 'programmer', l: '智能体 A: 程序猿', c: 'blue'},
+                                            {k: 'product', l: '智能体 B: 产品师', c: 'orange'},
+                                            {k: 'mapper', l: '智能体 C: 绘图师', c: 'indigo'},
+                                            {k: 'summarizer', l: '智能体 D: 总结师', c: 'purple'},
+                                            {k: 'promptEngineer', l: '智能体 E: 提示词工程师', c: 'green'},
+                                            {k: 'critic', l: '智能体 F: 挑刺师', c: 'red'},
+                                        ].map(a => (
+                                            <div key={a.k}>
+                                                <label className={`text-sm font-bold text-${a.c}-700 flex items-center gap-2 mb-1`}>{a.l}</label>
+                                                <textarea value={localSettings.agentPrompts[a.k]} onChange={(e) => handleAgentPromptChange(a.k, e.target.value)} className={`w-full h-20 border border-${a.c}-200 bg-${a.c}-50/20 rounded-lg p-3 text-sm focus:ring-2 focus:ring-${a.c}-500 outline-none resize-none`} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 shrink-0 rounded-b-xl">
+                            <button onClick={onClose} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-medium transition-colors">取消</button>
+                            <button onClick={() => { onSave(localSettings); onClose(); }} className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-md hover:shadow-lg transition-all">保存配置</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. DeepQueryPanel
+        const DeepQueryPanel = ({ queries, onQueryChange, isLoading }) => {
+            const productQueries = queries.filter(q => q.agent === 'Product');
+            const programmerQueries = queries.filter(q => q.agent === 'Programmer');
+            const handleOptionClick = (q, opt) => {
+                if (isLoading) return;
+                onQueryChange(q.id, 'selectedOption', q.selectedOption === opt ? '' : opt);
+            };
+            const handleAdoptRecommendation = (q) => {
+                if (isLoading || q.options.length === 0) return;
+                onQueryChange(q.id, 'selectedOption', q.options[0]);
+            };
+            const renderQueryCard = (q, colorClass, ringClass) => (
+                <div key={q.id} className={`bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-3 last:mb-0 transition-all hover:shadow-md animate-in slide-in-from-left-2 duration-300 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
+                    <div className="flex justify-between items-start gap-2 mb-2">
+                        <p className="text-sm font-medium text-gray-800 leading-snug flex-1">{q.question}</p>
+                        {q.options.length > 0 && <button onClick={() => handleAdoptRecommendation(q)} disabled={isLoading} className="shrink-0 text-[10px] flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded-full border border-amber-100 hover:bg-amber-100 transition-colors" title="自动选择第一个推荐选项"><Sparkles size={10} /> 采纳推荐</button>}
+                    </div>
+                    <div className="space-y-2">
+                        {q.options.map((opt, idx) => (
+                            <label key={idx} className={`flex items-start gap-2 text-xs text-gray-600 cursor-pointer hover:bg-gray-50 p-1.5 rounded transition-all duration-200 ${isLoading ? 'cursor-not-allowed' : ''} ${q.selectedOption === opt ? 'bg-indigo-50/50' : ''}`}>
+                                <input type="radio" name={`query-${q.id}`} checked={q.selectedOption === opt} onClick={(e) => handleOptionClick(q, opt)} onChange={() => {}} disabled={isLoading} className={`mt-0.5 ${colorClass} ${ringClass} cursor-pointer transition-transform duration-200 ${q.selectedOption === opt ? 'scale-110' : ''}`} />
+                                <span className={q.selectedOption === opt ? 'font-bold text-gray-800' : ''}>{opt}</span>
+                                {idx === 0 && <span className="text-[9px] text-amber-500 border border-amber-200 px-1 rounded ml-auto">荐</span>}
+                            </label>
+                        ))}
+                        {q.allowCustom && <input type="text" placeholder="自定义输入..." value={q.customAnswer || ''} onChange={(e) => onQueryChange(q.id, 'customAnswer', e.target.value)} disabled={isLoading} className="w-full text-xs p-2 border border-gray-200 rounded mt-1 focus:outline-none focus:border-indigo-400 bg-gray-50 focus:bg-white transition-colors disabled:bg-gray-100" />}
+                    </div>
+                </div>
+            );
+            return (
+                <div className="flex flex-col h-full bg-white border-r border-gray-200 shadow-xl w-full">
+                    <div className="p-3 border-b border-gray-200 bg-gray-50 font-bold text-gray-700 flex items-center gap-2 flex-shrink-0 z-20 relative"><CheckCheck size={16} className="text-amber-500"/> 深度问询 (需确认细节)</div>
+                    <div className="flex-1 overflow-y-auto p-4 border-b border-gray-200 bg-orange-50/30 relative scroll-smooth">
+                        <h3 className="text-sm font-bold text-orange-700 mb-3 flex items-center gap-2 sticky top-[-1px] bg-orange-50/95 backdrop-blur-sm py-2 z-10 w-full shadow-sm rounded-b-lg"><User size={16}/> 产品师 (智能体 B) <span className="text-xs font-normal text-gray-500 ml-auto">{productQueries.length} 个问题</span></h3>
+                        <div className="pb-2">{productQueries.length === 0 ? <p className="text-xs text-gray-400 italic text-center mt-10 animate-pulse">产品师暂无疑问。</p> : productQueries.map(q => renderQueryCard(q, 'text-orange-600', 'focus:ring-orange-500'))}</div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 bg-blue-50/30 relative scroll-smooth">
+                        <h3 className="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2 sticky top-[-1px] bg-blue-50/95 backdrop-blur-sm py-2 z-10 w-full shadow-sm rounded-b-lg"><Code size={16}/> 程序猿 (智能体 A) <span className="text-xs font-normal text-gray-500 ml-auto">{programmerQueries.length} 个问题</span></h3>
+                        <div className="pb-2">{programmerQueries.length === 0 ? <p className="text-xs text-gray-400 italic text-center mt-10 animate-pulse">程序猿暂无疑问。</p> : programmerQueries.map(q => renderQueryCard(q, 'text-blue-600', 'focus:ring-blue-500'))}</div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. MindMap
+        const NodeItem = ({ node, depth, onUpdate }) => {
+            const [isEditing, setIsEditing] = useState(false);
+            const [localText, setLocalText] = useState(node.text);
+            const inputRef = useRef(null);
+            useEffect(() => { setLocalText(node.text); }, [node.text]);
+            useEffect(() => {
+                if (isEditing && inputRef.current) {
+                    inputRef.current.focus();
+                    inputRef.current.style.height = 'auto';
+                    inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
+                }
+            }, [isEditing]);
+            const handleBlur = () => { setIsEditing(false); if (localText !== node.text) onUpdate({ ...node, text: localText }); };
+            const updateChild = (index, newChild) => {
+                const newChildren = [...node.children];
+                newChildren[index] = newChild;
+                onUpdate({ ...node, children: newChildren });
+            };
+            return (
+                <div className="flex flex-row items-center relative py-2">
+                    <div id={`node-${node.id}`} className={`relative z-20 flex flex-col justify-center group transition-shadow duration-200 ${depth === 0 ? 'bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-50' : 'bg-white text-gray-800 border border-gray-200 shadow-sm hover:border-indigo-400 hover:shadow-md'} rounded-lg min-w-[120px] max-w-[280px] shrink-0`}>
+                        <div className="px-4 py-3 w-full cursor-text" onDoubleClick={(e) => { e.stopPropagation(); setIsEditing(true); }}>
+                            {isEditing ? <textarea ref={inputRef} value={localText} onChange={(e) => { setLocalText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onBlur={handleBlur} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleBlur(); } }} className="w-full bg-transparent outline-none resize-none overflow-hidden text-sm font-bold leading-snug" rows={1} /> : <><div className="font-bold text-sm leading-snug select-none">{node.text}</div>{node.detail && <div className={`text-[10px] mt-1 leading-tight ${depth === 0 ? 'text-indigo-200' : 'text-gray-400'}`}>{node.detail}</div>}</>}
+                        </div>
+                    </div>
+                    {node.children && node.children.length > 0 && (
+                        <div className="flex flex-row items-center">
+                            <div className="w-12 h-px border-t-2 border-transparent shrink-0" />
+                            <div className="flex flex-col gap-6 pl-2 border-l-0 border-gray-200">
+                                {node.children.map((child, idx) => <NodeItem key={child.id} node={child} depth={depth + 1} onUpdate={(n) => updateChild(idx, n)} />)}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        const MindMap = ({ data, onUpdate }) => {
+            const containerRef = useRef(null);
+            const contentRef = useRef(null);
+            const [scale, setScale] = useState(1);
+            const [position, setPosition] = useState({ x: 50, y: 50 });
+            const [isDragging, setIsDragging] = useState(false);
+            const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+            const [svgPaths, setSvgPaths] = useState([]);
+            const drawLines = useCallback(() => {
+                if (!contentRef.current) return;
+                const containerRect = contentRef.current.getBoundingClientRect();
+                const newPaths = [];
+                const traverse = (node) => {
+                    const parentEl = document.getElementById(`node-${node.id}`);
+                    if (!parentEl) return;
+                    const parentRect = parentEl.getBoundingClientRect();
+                    const pX = (parentRect.right - containerRect.left) / scale;
+                    const pY = (parentRect.top + parentRect.height / 2 - containerRect.top) / scale;
+                    if (node.children) node.children.forEach(child => {
+                        const childEl = document.getElementById(`node-${child.id}`);
+                        if (childEl) {
+                            const childRect = childEl.getBoundingClientRect();
+                            const cX = (childRect.left - containerRect.left) / scale;
+                            const cY = (childRect.top + childRect.height / 2 - containerRect.top) / scale;
+                            const deltaX = cX - pX;
+                            const controlDist = Math.max(deltaX * 0.5, 20);
+                            newPaths.push(<path key={`${node.id}-${child.id}`} d={`M ${pX} ${pY} C ${pX + controlDist} ${pY}, ${cX - controlDist} ${cY}, ${cX} ${cY}`} stroke="#cbd5e1" strokeWidth="2" fill="none" />);
+                        }
+                        traverse(child);
+                    });
+                };
+                traverse(data);
+                setSvgPaths(newPaths);
+            }, [data, scale]);
+            useEffect(() => {
+                requestAnimationFrame(drawLines);
+                const resizeObserver = new ResizeObserver(() => requestAnimationFrame(drawLines));
+                resizeObserver.observe(containerRef.current);
+                resizeObserver.observe(contentRef.current);
+                const mutationObserver = new MutationObserver(() => requestAnimationFrame(drawLines));
+                mutationObserver.observe(contentRef.current, { childList: true, subtree: true, attributes: true, characterData: true });
+                return () => { resizeObserver.disconnect(); mutationObserver.disconnect(); };
+            }, [drawLines]);
+            const handleWheel = (e) => {
+                if (e.ctrlKey || e.metaKey || true) {
+                    const newScale = Math.min(Math.max(0.1, scale - e.deltaY * 0.001), 4);
+                    setScale(newScale);
+                }
+            };
+            const handleMouseDown = (e) => { if (e.target.closest('.group')) return; setIsDragging(true); setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y }); };
+            const handleMouseMove = (e) => { if (isDragging) setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); };
+            return (
+                <div ref={containerRef} className="w-full h-full bg-slate-50 overflow-hidden relative cursor-grab active:cursor-grabbing selection:bg-indigo-100" onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={() => setIsDragging(false)} onMouseLeave={() => setIsDragging(false)}>
+                    <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-50">
+                        <div className="bg-white/90 p-2 rounded-lg shadow-md flex flex-col gap-2 backdrop-blur-sm border border-gray-100">
+                            <button title="Zoom In" className="p-2 hover:bg-gray-100 rounded text-gray-600" onClick={() => setScale(s => Math.min(s + 0.1, 4))}><ZoomIn size={20}/></button>
+                            <button title="Reset View" className="p-2 hover:bg-gray-100 rounded text-gray-600" onClick={() => { setScale(1); setPosition({x:50, y:50}); }}><Move size={20}/></button>
+                            <button title="Zoom Out" className="p-2 hover:bg-gray-100 rounded text-gray-600" onClick={() => setScale(s => Math.max(s - 0.1, 0.1))}><ZoomOut size={20}/></button>
+                        </div>
+                    </div>
+                    <div className="absolute top-4 left-4 bg-white/60 backdrop-blur px-3 py-1 rounded-full text-[10px] text-gray-500 z-50 pointer-events-none border border-gray-200">双击节点编辑文本 · 滚轮缩放 · 拖拽平移</div>
+                    <div ref={contentRef} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }} className="absolute top-0 left-0 min-w-full min-h-full origin-top-left">
+                        <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">{svgPaths}</svg>
+                        <div className="inline-block p-10"><NodeItem node={data} depth={0} onUpdate={onUpdate} /></div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 5. InteractionPanel
+        const InteractionPanel = ({ instruction, onInstructionChange, suggestions, onSuggestionToggle, onAcceptAllSuggestions, onSubmit, isLoading }) => {
+            const productSuggestions = suggestions.filter(s => s.agent === 'Product');
+            const programmerSuggestions = suggestions.filter(s => s.agent === 'Programmer');
+            const renderSuggestionCard = (s, accentColor, icon) => (
+                <div key={s.id} className={`p-3 rounded-lg border transition-all cursor-pointer flex items-start gap-3 ${s.accepted ? `bg-${accentColor}-50 border-${accentColor}-300 shadow-inner` : `bg-white border-${accentColor}-100 hover:border-${accentColor}-300 shadow-sm`}`} onClick={() => !isLoading && onSuggestionToggle(s.id)}>
+                    <div className={`mt-0.5 min-w-[16px] h-4 border rounded flex items-center justify-center transition-colors ${s.accepted ? `bg-${accentColor}-500 border-${accentColor}-500` : 'border-gray-300 bg-gray-50'}`}>{s.accepted && <CheckCircle size={12} className="text-white"/>}</div>
+                    <div className="flex-1"><p className="text-xs text-gray-700 leading-relaxed">{s.text}</p></div>
+                </div>
+            );
+            return (
+                <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl w-full">
+                    <div className="p-4 border-b border-gray-100 flex-shrink-0 bg-indigo-50/50 z-20 relative">
+                        <h3 className="text-sm font-bold text-indigo-800 mb-2 flex items-center gap-2"><MessageSquare size={16}/> 1. AI 指令 (您的需求)</h3>
+                        <textarea className="w-full h-32 p-3 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm resize-none bg-white placeholder-gray-400 disabled:bg-gray-100 disabled:text-gray-500" placeholder="告诉 AI 您想修改什么..." value={instruction} onChange={(e) => onInstructionChange(e.target.value)} disabled={isLoading} />
+                    </div>
+                    <div className="flex justify-between items-center p-3 border-b border-gray-200 bg-emerald-50 z-10 shadow-sm shrink-0">
+                        <h3 className="text-sm font-bold text-emerald-700 flex items-center gap-2"><CheckCircle size={16}/> 3. 优化建议 ({suggestions.length})</h3>
+                        {suggestions.length > 0 && <button onClick={onAcceptAllSuggestions} disabled={isLoading} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">全部采纳</button>}
+                    </div>
+                    <div className={`flex-1 overflow-y-auto bg-gray-50/50 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
+                        <div className="p-4 border-b border-gray-100 bg-orange-50/30">
+                            <h4 className="text-xs font-bold text-orange-700 mb-2 flex items-center gap-2"><User size={14}/> 产品师建议 (UX/业务) <span className="bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full text-[10px]">{productSuggestions.length}</span></h4>
+                            <div className="space-y-2">{productSuggestions.length === 0 && <p className="text-xs text-gray-400 italic pl-6">暂无建议</p>}{productSuggestions.map(s => renderSuggestionCard(s, 'orange', <User size={12}/>))}</div>
+                        </div>
+                        <div className="p-4 bg-blue-50/30 pb-6">
+                            <h4 className="text-xs font-bold text-blue-700 mb-2 flex items-center gap-2"><Code size={14}/> 程序猿建议 (技术/逻辑) <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full text-[10px]">{programmerSuggestions.length}</span></h4>
+                            <div className="space-y-2">{programmerSuggestions.length === 0 && <p className="text-xs text-gray-400 italic pl-6">暂无建议</p>}{programmerSuggestions.map(s => renderSuggestionCard(s, 'blue', <Code size={12}/>))}</div>
+                        </div>
+                    </div>
+                    <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0 z-20 relative">
+                        <button onClick={onSubmit} disabled={isLoading} className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-white shadow-lg shadow-indigo-200 transition-all transform active:scale-[0.98] ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'}`}>
+                            {isLoading ? <><div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"/> 智能体团队工作中...</> : <><Send size={18} /> 一键提交 (Agents Start)</>}
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // 6. NoteViewer
+        const NoteViewer = ({ noteA, noteB, isOpen, onClose }) => {
+            const [activeTab, setActiveTab] = React.useState('B');
+            if (!isOpen) return null;
+            return (
+                <div className="absolute inset-0 z-40 bg-white/95 backdrop-blur-sm flex flex-col transition-all duration-300 animate-in fade-in slide-in-from-bottom-10">
+                    <div className="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-white shadow-sm shrink-0">
+                        <div className="flex gap-4">
+                            <button onClick={() => setActiveTab('B')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'B' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'}`}><FileText size={16}/> Note B (详细规格书 - 智能体D)</button>
+                            <button onClick={() => setActiveTab('A')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'A' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:bg-gray-100'}`}><BookOpen size={16}/> Note A (历史记录 - 线性)</button>
+                        </div>
+                        <div className="flex items-center gap-4"><span className="text-xs text-gray-400">{activeTab === 'A' ? '记录用户交互历史 (只读)' : '记录软件详细设计细节 (只读)'}</span><button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X size={20}/></button></div>
+                    </div>
+                    <div className="flex-1 overflow-auto p-8 bg-gray-50"><div className="max-w-4xl mx-auto bg-white rounded-xl shadow p-8 min-h-full"><pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-gray-800">{activeTab === 'A' ? noteA : noteB}</pre></div></div>
+                </div>
+            );
+        };
+
+        // --- APP ---
+
+        const MAX_HISTORY = 15;
+        function App() {
+            const [settings, setSettings] = useState(() => {
+                const saved = localStorage.getItem('ai_studio_settings');
+                return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+            });
+            const [history, setHistory] = useState({ past: [], present: INITIAL_PROJECT, future: [] });
+            const [showSettings, setShowSettings] = useState(false);
+            const [showNotes, setShowNotes] = useState(false);
+            const [isLoading, setIsLoading] = useState(false);
+            const [generatedPrompt, setGeneratedPrompt] = useState(null);
+            const [copySuccess, setCopySuccess] = useState(false);
+            const [userInstruction, setUserInstruction] = useState('');
+            const [activeQueries, setActiveQueries] = useState([]);
+            const [activeSuggestions, setActiveSuggestions] = useState([]);
+            const [activeCriticisms, setActiveCriticisms] = useState([]);
+
+            useEffect(() => { localStorage.setItem('ai_studio_settings', JSON.stringify(settings)); }, [settings]);
+            
+            const pushHistory = (newProject) => {
+                setHistory(prev => {
+                    const newPast = [...prev.past, prev.present].slice(-MAX_HISTORY);
+                    return { past: newPast, present: newProject, future: [] };
+                });
+            };
+            const handleUndo = () => {
+                setHistory(prev => {
+                    if (prev.past.length === 0) return prev;
+                    const newPresent = prev.past[prev.past.length - 1];
+                    const newPast = prev.past.slice(0, -1);
+                    return { past: newPast, present: newPresent, future: [prev.present, ...prev.future] };
+                });
+            };
+            const handleRedo = () => {
+                setHistory(prev => {
+                    if (prev.future.length === 0) return prev;
+                    const newPresent = prev.future[0];
+                    const newFuture = prev.future.slice(1);
+                    return { past: [...prev.past, prev.present], present: newPresent, future: newFuture };
+                });
+            };
+            const handleNewProject = () => {
+                if (confirm("新建项目？当前未保存的更改将会丢失。")) {
+                    setHistory({ past: [], present: { ...INITIAL_PROJECT, id: Date.now().toString(), lastModified: Date.now() }, future: [] });
+                    setActiveQueries([]); setActiveSuggestions([]); setActiveCriticisms([]); setUserInstruction(''); setGeneratedPrompt(null);
+                }
+            };
+            const handleSaveProject = () => {
+                const data = JSON.stringify(history.present);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ai-studio-project-${history.present.name.replace(/\s+/g, '-')}.json`;
+                a.click();
+            };
+            const handleLoadProject = (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const loaded = JSON.parse(ev.target.result);
+                        if (!loaded.mindMap || !loaded.noteA || !loaded.noteB) throw new Error("Invalid format");
+                        setHistory({ past: [], present: loaded, future: [] });
+                        setActiveQueries([]); setActiveSuggestions([]); setActiveCriticisms([]); setUserInstruction(''); setGeneratedPrompt(null);
+                    } catch (err) { alert("无法加载项目文件。"); }
+                };
+                reader.readAsText(file);
+            };
+            const handleQueryChange = (id, field, value) => { setActiveQueries(prev => prev.map(q => q.id === id ? { ...q, [field]: value } : q)); };
+            const handleSuggestionToggle = (id) => { setActiveSuggestions(prev => prev.map(s => s.id === id ? { ...s, accepted: !s.accepted } : s)); };
+            const handleAcceptAllSuggestions = () => { setActiveSuggestions(prev => prev.map(s => ({ ...s, accepted: true }))); };
+            const handleDismissCriticism = (id) => { setActiveCriticisms(prev => prev.filter(c => c.id !== id)); };
+            const handleCopyPrompt = async () => {
+                if (!generatedPrompt) return;
+                try { await navigator.clipboard.writeText(generatedPrompt); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); } 
+                catch (err) { alert('复制失败，请尝试手动选择复制'); }
+            };
+            const handleCombinedSubmit = async () => {
+                const relevantQueries = activeQueries.filter(q => q.selectedOption || q.customAnswer);
+                const relevantSuggestions = activeSuggestions.filter(s => s.accepted);
+                if (!userInstruction && relevantQueries.length === 0 && relevantSuggestions.length === 0) return;
+                setIsLoading(true);
+                setActiveCriticisms([]);
+                try {
+                    const timestamp = new Date().toLocaleString('zh-CN');
+                    let logEntry = `\n--------------------------------------------------\n[时间]: ${timestamp}\n`;
+                    if (userInstruction) logEntry += `[用户指令]: ${userInstruction}\n`;
+                    if (relevantQueries.length > 0) {
+                        logEntry += `[深度问询回答]:\n`;
+                        relevantQueries.forEach(q => { logEntry += `  - 问(${q.agent}): ${q.question}\n    答: ${q.selectedOption || ''} ${q.customAnswer ? `(自定义: ${q.customAnswer})` : ''}\n`; });
+                    }
+                    if (relevantSuggestions.length > 0) {
+                        logEntry += `[采纳优化建议]:\n`;
+                        relevantSuggestions.forEach(s => { const cleanText = s.text.replace(/^建议/, ''); logEntry += `  - ${cleanText} (来自 ${s.agent})\n`; });
+                    } else { logEntry += `[优化建议]: 未采纳任何建议 (忽略)\n`; }
+                    const updatedNoteA = history.present.noteA + logEntry;
+                    const result = await runMultiAgentWorkflow(settings, updatedNoteA, history.present.noteB);
+                    pushHistory({ ...history.present, mindMap: result.mindMap, noteA: updatedNoteA, noteB: result.noteB });
+                    setActiveQueries(result.deepQueries || []);
+                    setActiveSuggestions(result.suggestions || []);
+                    setActiveCriticisms(result.criticisms || []);
+                    setUserInstruction('');
+                } catch (error) { alert("AI 智能体执行失败: " + error.message); } finally { setIsLoading(false); }
+            };
+            const handleGenerateFinalPrompt = async () => {
+                setIsLoading(true);
+                try { const prompt = await generatePromptForAIStudio(settings, history.present.noteB); setGeneratedPrompt(prompt); } 
+                catch (error) { alert("生成提示词失败。"); } finally { setIsLoading(false); }
+            };
+
+            return (
+                <div className="h-screen w-screen flex flex-col bg-gray-50 font-sans text-gray-800 relative">
+                    {isLoading && (
+                        <div className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[2px] flex items-center justify-center cursor-wait animate-in fade-in duration-300">
+                            <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full mx-4 border border-gray-100">
+                                <div className="relative"><div className="animate-spin h-14 w-14 border-[5px] border-indigo-100 border-t-indigo-600 rounded-full"/><div className="absolute inset-0 flex items-center justify-center"><Cpu className="w-6 h-6 text-indigo-600 animate-pulse" /></div></div>
+                                <div className="text-center space-y-2"><h3 className="text-lg font-bold text-gray-800">{generatedPrompt ? '智能体 E 正在生成提示词...' : '智能体团队正在协作...'}</h3><p className="text-sm text-gray-500">{generatedPrompt ? '正在整理 Note B 规格说明书' : '分析指令 · 更新思维导图 · 生成建议 · 毒舌挑刺'}</p></div>
+                            </div>
+                        </div>
+                    )}
+                    <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0 shadow-sm z-30">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 text-indigo-700 font-extrabold text-xl tracking-tight"><Cpu className="text-indigo-600" /><span>AI 架构师工作室</span></div>
+                            <div className="h-6 w-px bg-gray-200 mx-4"></div>
+                            <div className="flex gap-1">
+                                <button onClick={handleNewProject} disabled={isLoading} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors disabled:opacity-50" title="新建"><Plus size={20}/></button>
+                                <button onClick={handleSaveProject} disabled={isLoading} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors disabled:opacity-50" title="保存"><Save size={20}/></button>
+                                <label className={`p-2 hover:bg-gray-100 rounded-lg text-gray-600 cursor-pointer transition-colors ${isLoading ? 'opacity-50 pointer-events-none' : ''}`} title="打开"><FolderOpen size={20}/><input type="file" className="hidden" accept=".json" onChange={handleLoadProject} disabled={isLoading}/></label>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                            <div className="flex gap-2">
+                                <button onClick={handleUndo} disabled={history.past.length === 0 || isLoading} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30 text-gray-600" title="撤销"><Undo size={20}/></button>
+                                <button onClick={handleRedo} disabled={history.future.length === 0 || isLoading} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30 text-gray-600" title="重做"><Redo size={20}/></button>
+                            </div>
+                            <button onClick={() => setShowNotes(true)} disabled={isLoading} className="flex items-center gap-2 bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all hover:shadow-md disabled:opacity-50"><FileText size={18} className="text-orange-500"/> 查看笔记 (A/B)</button>
+                            <button onClick={handleGenerateFinalPrompt} disabled={isLoading} className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:shadow-lg hover:translate-y-[-1px] transition-all disabled:opacity-70 disabled:cursor-not-allowed"><Code size={18} /> 生成 AI Studio 提示词</button>
+                            <button onClick={() => setShowSettings(true)} disabled={isLoading} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 disabled:opacity-50"><Settings size={20}/></button>
+                        </div>
+                    </header>
+                    <main className="flex-1 flex overflow-hidden relative">
+                        <div className="w-[320px] shrink-0 z-20 h-full"><DeepQueryPanel queries={activeQueries} onQueryChange={handleQueryChange} isLoading={isLoading} /></div>
+                        <div className="flex-1 relative bg-slate-50 border-l border-r border-gray-200">
+                            <MindMap data={history.present.mindMap} onUpdate={(newMap) => { setHistory(prev => ({...prev, present: { ...prev.present, mindMap: newMap }})); }} />
+                            <div className="absolute top-4 left-4 bg-white/80 backdrop-blur p-3 rounded-lg shadow-sm text-xs text-gray-500 max-w-xs pointer-events-none select-none"><h4 className="font-bold text-gray-700 mb-1">智能体 C (绘图师)</h4><p>思维导图由 AI 自动生成。点击节点 +/- 可展开查看。</p></div>
+                            <CriticismBubbles criticisms={activeCriticisms} onClose={handleDismissCriticism} />
+                        </div>
+                        <div className="w-[320px] shrink-0 z-20 h-full"><InteractionPanel instruction={userInstruction} onInstructionChange={setUserInstruction} suggestions={activeSuggestions} onSuggestionToggle={handleSuggestionToggle} onAcceptAllSuggestions={handleAcceptAllSuggestions} onSubmit={handleCombinedSubmit} isLoading={isLoading} /></div>
+                        <NoteViewer isOpen={showNotes} onClose={() => setShowNotes(false)} noteA={history.present.noteA} noteB={history.present.noteB} />
+                        {generatedPrompt && (
+                            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-10 animate-in fade-in">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full h-full max-w-5xl flex flex-col overflow-hidden">
+                                    <div className="p-5 border-b flex justify-between items-center bg-gray-50"><div className="flex items-center gap-3"><div className="bg-green-100 p-2 rounded-lg"><Code className="text-green-600"/></div><h2 className="text-xl font-bold text-gray-800">智能体 E 生成的构建提示词</h2></div><button onClick={() => setGeneratedPrompt(null)} className="text-gray-500 hover:text-red-500 font-bold px-4 py-2 hover:bg-red-50 rounded-lg">关闭</button></div>
+                                    <div className="flex-1 p-8 overflow-auto bg-slate-50"><pre className="whitespace-pre-wrap font-mono text-sm text-gray-800 leading-relaxed select-all bg-white p-6 rounded-xl border border-gray-200 shadow-sm">{generatedPrompt}</pre></div>
+                                    <div className="p-5 border-t bg-gray-50 flex justify-end"><button onClick={handleCopyPrompt} className={`px-8 py-3 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 ${copySuccess ? 'bg-green-500 text-white hover:bg-green-600 shadow-green-200' : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-xl shadow-indigo-200'}`}>{copySuccess ? <><Check size={20} /> 已复制全部！</> : <><Copy size={20} /> 复制全部内容</>}</button></div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                    <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} settings={settings} onSave={setSettings} />
+                </div>
+            );
+        }
+
+        // --- ROOT RENDER ---
+        
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<App />);
+
+    </script>
+</body>
 </html>
