@@ -1,0 +1,5 @@
+{
+  "name": "AI Architect Studio",
+  "description": "一个综合性的 AI 驱动软件设计工具，结合了思维导图、需求分析和提示词工程，用于生成 Google AI Studio 构建提示词。",
+  "requestFramePermissions": []
+}
