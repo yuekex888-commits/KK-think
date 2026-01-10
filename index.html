@@ -167,6 +167,10 @@
             throw new Error(`No JSON found in response.`);
         };
 
+        const cleanAIOutput = (text: string): string => {
+            return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        };
+
         const callAI = async (settings: AISettings, systemPrompt: string, userContent: string, jsonMode: boolean = false): Promise<string> => {
             const payload = {
                 model: settings.model,
@@ -192,7 +196,7 @@
                 const data = await response.json();
                 const content = data.choices[0]?.message?.content;
                 if (!content) throw new Error("API returned empty content");
-                return content;
+                return cleanAIOutput(content);
             } catch (error) {
                 console.error("AI Request Failed", error);
                 throw error;
